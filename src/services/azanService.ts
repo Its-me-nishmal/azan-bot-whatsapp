@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { District, PrayerTime, Location } from '../types/index.js'
-import { getCurrentDateMD } from '../utils/time.js'
+import { getCurrentDateMD, getCurrentTime } from '../utils/time.js'
 import { logger } from '../utils/logger.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -126,8 +126,10 @@ export class AzanService {
             return null
         }
 
-        const now = new Date()
-        const currentTime = now.getHours() * 60 + now.getMinutes()
+        // CRITICAL: Use IST time, not server time
+        const currentTimeStr = getCurrentTime()
+        const [currentHours, currentMinutes] = currentTimeStr.split(':').map(Number)
+        const currentTime = currentHours * 60 + currentMinutes
 
         const prayers = [
             { name: 'fajr', time: prayerTimes.fajr },

@@ -1,7 +1,7 @@
 import { WAMessage } from '@whiskeysockets/baileys'
 import { AzanService } from '../services/azanService.js'
 import { logger } from '../utils/logger.js'
-import { getCurrentTime } from '../utils/time.js'
+import { getCurrentTime, formatDateIST } from '../utils/time.js'
 
 export class MessageHandler {
     private azanService: AzanService
@@ -89,7 +89,7 @@ export class MessageHandler {
         const message = `🕌 *Today's Prayer Times*
 
 📍 Location: ${location.name}, ${location.district}
-📅 Date: ${new Date().toLocaleDateString('en-IN')}
+📅 Date: ${formatDateIST(new Date(), 'dd MMM yyyy')}
 
 ⏰ Prayer Times:
 • Fajr (Dawn): ${prayerTimes.fajr}

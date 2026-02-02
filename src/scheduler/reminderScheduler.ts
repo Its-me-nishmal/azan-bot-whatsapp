@@ -36,7 +36,8 @@ export class ReminderScheduler {
         })
 
         this.isRunning = true
-        logger.info('⏰ Reminder scheduler started')
+        logger.info('⏰ Reminder scheduler started (Timezone: Asia/Kolkata - IST)')
+        logger.info(`📅 Enabled prayers: ${this.enabledPrayers.join(', ')}`)
     }
 
     /**

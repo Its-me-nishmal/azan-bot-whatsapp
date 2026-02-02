@@ -1,0 +1,61 @@
+{
+    "name": "whatsapp-azan-bot",
+    "version": "1.0.0",
+    "description": "Multi-session WhatsApp bot for automated Azan prayer time reminders across Kerala",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "discover-groups": "tsx scripts/discoverGroups.ts",
+        "create-admin": "tsx src/scripts/createAdminUser.ts",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "test:integration": "jest --testPathPattern=integration"
+    },
+    "keywords": [
+        "whatsapp",
+        "bot",
+        "azan",
+        "prayer-times",
+        "kerala",
+        "baileys"
+    ],
+    "author": "Cipher Nichu",
+    "license": "MIT",
+    "dependencies": {
+        "@hapi/boom": "^10.0.1",
+        "@whiskeysockets/baileys": "^6.7.8",
+        "bcrypt": "^6.0.0",
+        "cors": "^2.8.5",
+        "date-fns": "^4.1.0",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "joi": "^18.0.2",
+        "jsonwebtoken": "^9.0.3",
+        "mongoose": "^8.9.3",
+        "node-cron": "^3.0.3",
+        "pino": "^9.6.0",
+        "qrcode": "^1.5.4",
+        "socket.io": "^4.8.1"
+    },
+    "devDependencies": {
+        "@types/bcrypt": "^6.0.0",
+        "@types/cors": "^2.8.17",
+        "@types/express": "^5.0.0",
+        "@types/jest": "^30.0.0",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^22.10.2",
+        "@types/node-cron": "^3.0.11",
+        "@types/qrcode": "^1.5.5",
+        "@types/supertest": "^6.0.3",
+        "jest": "^30.2.0",
+        "mongodb-memory-server": "^11.0.1",
+        "supertest": "^7.2.2",
+        "ts-jest": "^29.4.6",
+        "tsx": "^4.19.2",
+        "typescript": "^5.7.2"
+    }
+}

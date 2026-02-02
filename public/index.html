@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Azan Bot - Management</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    h1 {
+      color: #667eea;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .card h2 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-danger-sm {
+      background: #ef4444;
+      color: white;
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .session-card {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-left: 4px solid #667eea;
+    }
+
+    .qr-code {
+      max-width: 300px;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+    }
+
+    #sessions-list,
+    #group-mappings,
+    #discovered-groups {
+      min-height: 100px;
+    }
+
+    .groups-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .group-item {
+      background: #f0f9ff;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 3px solid #667eea;
+    }
+
+    .mappings-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    .mappings-table th {
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .mappings-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .mappings-table code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #667eea;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-badge.active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-badge.inactive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .flex {
+      display: flex;
+    }
+
+    .justify-between {
+      justify-content: space-between;
+    }
+
+    .items-start {
+      align-items: flex-start;
+    }
+
+    .gap-2 {
+      gap: 8px;
+    }
+
+    .text-sm {
+      font-size: 14px;
+    }
+
+    .text-gray-500 {
+      color: #6b7280;
+    }
+
+    .text-gray-600 {
+      color: #4b5563;
+    }
+
+    .mt-4 {
+      margin-top: 16px;
+    }
+
+    .mb-2 {
+      margin-bottom: 8px;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    #connection-status {
+      background: #ecfdf5;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      color: #065f46;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      border-left: 4px solid #667eea;
+      transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .location-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .health-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h1>🕌 WhatsApp Azan Bot</h1>
+          <div class="status">
+            <span id="connection-status">Connecting...</span>
+            <span style="margin-left: 20px;">👤 <span id="username-display"></span></span>
+          </div>
+        </div>
+        <button onclick="logout()" class="btn-danger">
+          🚪 Logout
+        </button>
+      </div>
+    </div>
+
+    <!-- Analytics Dashboard -->
+    <div class="card" style="margin-bottom: 20px;">
+      <h2>📊 Analytics & Statistics</h2>
+
+      <div
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-sessions">-</div>
+          <div class="stat-label">Active Sessions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-groups">-</div>
+          <div class="stat-label">Total Groups</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-delivered">-</div>
+          <div class="stat-label">Delivered Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-failed">-</div>
+          <div class="stat-label">Failed Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-rate">-%</div>
+          <div class="stat-label">Delivery Rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-uptime">-</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h3 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">Top Locations</h3>
+          <div id="top-locations"></div>
+        </div>
+        <div>
+          <h3 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">Session Health</h3>
+          <div id="session-health"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Session Management -->
+      <div class="card">
+        <h2>📱 Session Management</h2>
+
+        <div class="form-group">
+          <label for="session-id">Session ID (Phone Number)</label>
+          <input type="text" id="session-id" placeholder="+1234567890">
+        </div>
+
+        <div class="form-group">
+          <label for="phone-number">Display Name (Optional)</label>
+          <input type="text" id="phone-number" placeholder="My Bot">
+        </div>
+
+        <button class="btn-primary" onclick="createSession()">
+          ➕ Create Session
+        </button>
+
+        <hr style="margin: 30px 0; border: none; border-top: 2px solid #f0f0f0;">
+
+        <h3 style="margin-bottom: 15px; color: #333;">Active Sessions</h3>
+        <div id="sessions-list"></div>
+      </div>
+
+      <!-- Group Configuration -->
+      <div class="card">
+        <h2>⚙️ Group Configuration</h2>
+
+        <div class="form-group">
+          <label for="session-selector">Select Session</label>
+          <select id="session-selector" onchange="onSessionSelected()">
+            <option value="">Select a session...</option>
+          </select>
+        </div>
+
+        <div id="group-section" style="display: none;">
+          <button class="btn-primary" onclick="discoverGroups()" style="width: 100%; margin-bottom: 15px;">
+            🔍 Discover Groups
+          </button>
+
+          <div id="discover-status" style="color: #667eea; font-weight: 600; margin-bottom: 10px;"></div>
+
+          <div id="discovered-groups" style="margin-bottom: 30px;">
+            <p class="text-gray-500">Select a session to discover groups</p>
+          </div>
+
+          <hr style="margin: 30px 0; border: none; border-top: 2px solid #f0f0f0;">
+
+          <h3 style="margin-bottom: 15px; color: #333;">📍 Map Group to Location</h3>
+
+          <div class="form-group">
+            <label for="group-selector">Select Group</label>
+            <select id="group-selector">
+              <option value="">First discover groups above...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="location-selector">Select Location (Prayer Times)</label>
+            <select id="location-selector">
+              <option value="">Loading locations...</option>
+            </select>
+          </div>
+
+          <button class="btn-primary" onclick="addGroupMapping()" style="width: 100%;">
+            ➕ Add Mapping
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Group Mappings -->
+      <div class="card full-width">
+        <h2>📋 Active Group Mappings</h2>
+        <div id="group-mappings">
+          <p class="text-gray-500">Select a session to view group mappings</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

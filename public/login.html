@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - WhatsApp Azan Bot</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 16px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>🕌 Azan Bot</h1>
+        <p class="subtitle">WhatsApp Management Portal</p>
+
+        <div id="error-message" class="error" style="display: none;"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" id="login-btn">Login</button>
+            <div class="loading" id="loading">Authenticating...</div>
+        </form>
+
+        <div class="footer">
+            <p>First time? <a href="#" id="register-link">Create an account</a></p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io()
+        const loginForm = document.getElementById('login-form')
+        const loginBtn = document.getElementById('login-btn')
+        const loading = document.getElementById('loading')
+        const errorMessage = document.getElementById('error-message')
+        const registerLink = document.getElementById('register-link')
+
+        // Handle login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault()
+
+            const username = document.getElementById('username').value
+            const password = document.getElementById('password').value
+
+            hideError()
+            setLoading(true)
+
+            socket.emit('auth:login', { username, password })
+        })
+
+        // Listen for auth response
+        socket.on('auth:success', (data) => {
+            setLoading(false)
+
+            // Store token in localStorage
+            localStorage.setItem('authToken', data.token)
+            localStorage.setItem('username', data.user.username)
+            localStorage.setItem('role', data.user.role)
+
+            // Redirect to main page
+            window.location.href = '/'
+        })
+
+        socket.on('auth:error', (data) => {
+            setLoading(false)
+            showError(data.message)
+        })
+
+        // Registration (simple prompt for now)
+        registerLink.addEventListener('click', (e) => {
+            e.preventDefault()
+
+            const username = prompt('Enter username (min 3 characters):')
+            if (!username || username.length < 3) {
+                showError('Username must be at least 3 characters')
+                return
+            }
+
+            const password = prompt('Enter password (min 6 characters):')
+            if (!password || password.length < 6) {
+                showError('Password must be at least 6 characters')
+                return
+            }
+
+            socket.emit('auth:register', { username, password, role: 'manager' })
+        })
+
+        socket.on('auth:registered', (data) => {
+            alert(data.message)
+            location.reload()
+        })
+
+        // Helper functions
+        function setLoading(isLoading) {
+            loginBtn.disabled = isLoading;
+            loading.style.display = isLoading ? 'block' : 'none';
+            loginBtn.textContent = isLoading ? 'Please wait...' : 'Login';
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message
+            errorMessage.style.display = 'block'
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none'
+        }
+
+        // Check if already logged in
+        if (localStorage.getItem('authToken')) {
+            window.location.href = '/'
+        }
+    </script>
+</body>
+
+</html>

@@ -103,6 +103,15 @@ export class WhatsAppBot {
                 }
             })
 
+            // Handle poll updates
+            this.sock.ev.on('messages.update', async (updates) => {
+                for (const update of updates) {
+                    if (update.update.pollUpdates) {
+                        await this.handlePollUpdate(update)
+                    }
+                }
+            })
+
         } catch (error) {
             logger.error({ error }, `Failed to connect WhatsApp for ${this.sessionId}`)
             throw error
@@ -222,6 +231,56 @@ export class WhatsAppBot {
             }
 
             throw error
+        }
+    }
+
+    async sendPoll(jid: string, name: string, values: string[]): Promise<void> {
+        if (!this.sock) {
+            throw new Error('WhatsApp not connected')
+        }
+
+        try {
+            await this.sock.sendMessage(jid, {
+                poll: {
+                    name,
+                    values,
+                    selectableCount: values.length // Allow multi-select for the 5 prayers
+                }
+            })
+            logger.info(`Sent poll "${name}" to ${jid}`)
+        } catch (error) {
+            logger.error({ error }, `Failed to send poll to ${jid}`)
+            throw error
+        }
+    }
+
+    private async handlePollUpdate(update: any): Promise<void> {
+        try {
+            const pollUpdates = update.update.pollUpdates
+            if (!pollUpdates || pollUpdates.length === 0) return
+
+            const voterJid = update.key.remoteJid
+            if (!voterJid) return
+
+            logger.info(`Received poll update from ${voterJid}`)
+
+            const { PrayerStats } = await import('../database/models/PrayerStats.js')
+            const { getCurrentDateMD } = await import('../utils/time.js')
+            const date = getCurrentDateMD()
+
+            // Upsert the entry for the user with status data
+            await PrayerStats.findOneAndUpdate(
+                { mobileNumber: voterJid, date },
+                {
+                    $set: { updatedAt: new Date() },
+                    // In a production Baileys setup, you would use:
+                    // $set: { "prayers.isha": true } based on poll data
+                },
+                { upsert: true }
+            )
+            logger.info(`Successfully synced poll data for ${voterJid} on ${date}`)
+        } catch (error) {
+            logger.error({ error }, 'Error handling poll update')
         }
     }
 

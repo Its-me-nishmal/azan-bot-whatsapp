@@ -38,6 +38,9 @@ export class MessageHandler {
             else if (command === 'locations' || command === '/locations') {
                 await this.sendLocationsMessage(sendReply)
             }
+            else if (command === '!analyze' || command === '/analyze') {
+                await this.handleAnalyzeCommand(message, sendReply)
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             const errorStack = error instanceof Error ? error.stack : undefined
@@ -162,6 +165,49 @@ export class MessageHandler {
 
         await sendReply(message)
         logger.info(`Sent next prayer time for ${location.name}`)
+    }
+
+    /**
+     * Handle !analyze command
+     */
+    private async handleAnalyzeCommand(message: WAMessage, sendReply: (text: string) => Promise<void>): Promise<void> {
+        const jid = message.key.remoteJid
+        if (!jid) return
+
+        try {
+            const { PrayerStats } = await import('../database/models/PrayerStats.js')
+
+            // Get stats for the user
+            const stats = await PrayerStats.find({ mobileNumber: jid }).sort({ date: -1 }).limit(7)
+
+            if (stats.length === 0) {
+                await sendReply('📊 *Prayer Analytics*\n\nNo data found yet. Participate in the daily Isha polls to track your progress!')
+                return
+            }
+
+            let summary = `📊 *Your Prayer Analytics (Last ${stats.length} days)*\n\n`
+
+            stats.forEach(s => {
+                const p = s.prayers
+                const count = [p.fajr, p.dhuhr, p.asr, p.maghrib, p.isha].filter(v => v).length
+                summary += `📅 ${s.date}: ${count}/5 Prayers\n`
+            })
+
+            const totalPrayers = stats.reduce((acc, s) => {
+                const count = [s.prayers.fajr, s.prayers.dhuhr, s.prayers.asr, s.prayers.maghrib, s.prayers.isha].filter(v => v).length
+                return acc + count
+            }, 0)
+
+            const percentage = Math.round((totalPrayers / (stats.length * 5)) * 100)
+
+            summary += `\n📈 *Average Consistency*: ${percentage}%`
+            summary += `\n\nKeep it up! "Verily, prayer prevents from shameful and unjust deeds." (29:45)`
+
+            await sendReply(summary)
+        } catch (error) {
+            logger.error({ error }, 'Failed to handle !analyze command')
+            await sendReply('❌ Failed to retrieve analytics.')
+        }
     }
 
     /**

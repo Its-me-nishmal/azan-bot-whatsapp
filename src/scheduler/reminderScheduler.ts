@@ -33,11 +33,95 @@ export class ReminderScheduler {
         // Run every minute
         cron.schedule('* * * * *', async () => {
             await this.checkAndSendReminders()
+            await this.checkAndTriggerIshaPoll()
         })
 
         this.isRunning = true
         logger.info('⏰ Reminder scheduler started (Timezone: Asia/Kolkata - IST)')
         logger.info(`📅 Enabled prayers: ${this.enabledPrayers.join(', ')}`)
+    }
+
+    /**
+     * Check if it's time to send the Isha summary poll (20 to 200 minutes range after Isha)
+     */
+    private async checkAndTriggerIshaPoll(): Promise<void> {
+        const currentTime = getCurrentTime()
+        const sessions = this.sessionManager.getAllSessions()
+        const { getCurrentDateMD, addMinutes } = await import('../utils/time.js')
+        const today = getCurrentDateMD()
+
+        for (const bot of sessions) {
+            try {
+                const configs = await GroupConfig.find({
+                    sessionId: bot.sessionId,
+                    enabled: true
+                })
+
+                for (const config of configs) {
+                    const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
+                    if (!prayerTime || !prayerTime.isha) continue
+
+                    // Seeded random offset between 20 and 200 minutes
+                    // Using groupJid + date as seed to keep it consistent for the day
+                    const seed = config.groupJid + today
+                    let hash = 0
+                    for (let i = 0; i < seed.length; i++) {
+                        hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+                        hash |= 0 // Convert to 32bit integer
+                    }
+                    const randomOffset = Math.abs(hash % (200 - 20)) + 20
+                    const pollTime = addMinutes(prayerTime.isha, randomOffset)
+
+                    if (currentTime === pollTime) {
+                        logger.info(`🎯 Triggering Isha Summary Poll for group ${config.groupJid} (Offset: ${randomOffset}m)`)
+                        await this.sendPollToMembers(bot.sessionId, config.groupJid)
+                    }
+                }
+            } catch (error) {
+                logger.error({ error }, 'Error in checkAndTriggerIshaPoll')
+            }
+        }
+    }
+
+    /**
+     * Send poll to members one-by-one with randomized delay
+     */
+    private async sendPollToMembers(sessionId: string, groupJid: string): Promise<void> {
+        const bot = this.sessionManager.getSession(sessionId)
+        if (!bot) return
+
+        try {
+            // Get group metadata to find participants
+            const groupMetadata = await bot.getAllGroups()
+            const group = groupMetadata.find(g => g.id === groupJid)
+
+            if (!group || !group.participants) {
+                logger.warn(`No participants found for group ${groupJid}`)
+                return
+            }
+
+            const prayers = ['🌅 Subh (Fajr)', '☀️ Duhr', '🕒 Asr', '🌆 Magrib', '🌙 Isha']
+            const pollName = 'Did you pray today? (Daily Summary)'
+
+            // Send to members one by one with random delay
+            for (const participant of group.participants) {
+                const jid = participant.id
+
+                // Random delay between 5 to 30 seconds to prevent spam
+                const delay = Math.floor(Math.random() * (30000 - 5000 + 1) + 5000)
+
+                setTimeout(async () => {
+                    try {
+                        await bot.sendPoll(jid, pollName, prayers)
+                        logger.info(`✅ Sent daily summary poll to ${jid} (Session: ${sessionId})`)
+                    } catch (error) {
+                        logger.error({ error, jid }, 'Failed to send poll to member')
+                    }
+                }, delay)
+            }
+        } catch (error) {
+            logger.error({ error }, `Error sending polls to group ${groupJid}`)
+        }
     }
 
     /**

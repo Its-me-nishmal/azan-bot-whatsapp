@@ -1,7 +1,7 @@
 import { WAMessage } from '@whiskeysockets/baileys'
 import { AzanService } from '../services/azanService.js'
 import { logger } from '../utils/logger.js'
-import { getCurrentTime, formatDateIST } from '../utils/time.js'
+import { getCurrentTime, formatDateIST, formatTimeForDisplay } from '../utils/time.js'
 
 export class MessageHandler {
     private azanService: AzanService
@@ -87,18 +87,18 @@ export class MessageHandler {
         }
 
         const message = `🕌 *Today's Prayer Times*
-
-📍 Location: ${location.name}, ${location.district}
-📅 Date: ${formatDateIST(new Date(), 'dd MMM yyyy')}
-
-⏰ Prayer Times:
-• Fajr (Dawn): ${prayerTimes.fajr}
-• Dhuhr (Noon): ${prayerTimes.dhuhr}
-• Asr (Afternoon): ${prayerTimes.asr}
-• Maghrib (Sunset): ${prayerTimes.maghrib}
-• Isha (Night): ${prayerTimes.isha}
-
-May Allah accept your prayers. 🤲`
+    
+    📍 Location: ${location.name}, ${location.district}
+    📅 Date: ${formatDateIST(new Date(), 'dd MMM yyyy')}
+    
+    ⏰ Prayer Times:
+    • Fajr (Dawn): ${formatTimeForDisplay(prayerTimes.fajr)}
+    • Dhuhr (Noon): ${formatTimeForDisplay(prayerTimes.dhuhr)}
+    • Asr (Afternoon): ${formatTimeForDisplay(prayerTimes.asr)}
+    • Maghrib (Sunset): ${formatTimeForDisplay(prayerTimes.maghrib)}
+    • Isha (Night): ${formatTimeForDisplay(prayerTimes.isha)}
+    
+    May Allah accept your prayers. 🤲`
 
         await sendReply(message)
         logger.info(`Sent today's prayer times for ${location.name}`)
@@ -151,14 +151,14 @@ May Allah accept your prayers. 🤲`
         }
 
         const message = `🕌 *Next Prayer Time*
-
-📍 Location: ${location.name}, ${location.district}
-⏰ Current Time: ${currentTime}
-
-🔔 Next Prayer: ${nextPrayer}
-⏱️ Time: ${nextTime}
-
-May Allah guide us. 🤲`
+    
+    📍 Location: ${location.name}, ${location.district}
+    ⏰ Current Time: ${formatTimeForDisplay(currentTime)}
+    
+    🔔 Next Prayer: ${nextPrayer}
+    ⏱️ Time: ${formatTimeForDisplay(nextTime as string)}
+    
+    May Allah guide us. 🤲`
 
         await sendReply(message)
         logger.info(`Sent next prayer time for ${location.name}`)
@@ -189,7 +189,7 @@ Show this help message
 *Quick Tips:*
 • Location names are case-insensitive
 • Works with partial names (e.g., "malap" finds Malappuram)
-• All times are in 24-hour format (HH:MM)
+• Times are in 12-hour format (AM/PM)
 
 May Allah bless you! 🤲`
 

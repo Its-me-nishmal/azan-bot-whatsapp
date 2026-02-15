@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { District, PrayerTime, Location } from '../types/index.js'
-import { getCurrentDateMD, getCurrentTime } from '../utils/time.js'
+import { getCurrentDateMD, getCurrentTime, normalizePrayerTime } from '../utils/time.js'
 import { logger } from '../utils/logger.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -72,11 +72,22 @@ export class AzanService {
             const parsedData = JSON.parse(fileData)
 
             // Extract the data array (files have structure: { data: [...] })
-            const data: PrayerTime[] = Array.isArray(parsedData) ? parsedData : (parsedData.prayer_times || parsedData.data)
+            let data: PrayerTime[] = Array.isArray(parsedData) ? parsedData : (parsedData.prayer_times || parsedData.data)
 
             if (!data || !Array.isArray(data)) {
                 throw new Error(`Invalid data format for location ${locationId}`)
             }
+
+            // Normalize times to 24-hour format for consistent calculations
+            data = data.map(day => ({
+                ...day,
+                fajr: normalizePrayerTime(day.fajr, 'fajr'),
+                sunrise: normalizePrayerTime(day.sunrise, 'sunrise'),
+                dhuhr: normalizePrayerTime(day.dhuhr, 'dhuhr'),
+                asr: normalizePrayerTime(day.asr, 'asr'),
+                maghrib: normalizePrayerTime(day.maghrib, 'maghrib'),
+                isha: normalizePrayerTime(day.isha, 'isha')
+            }))
 
             this.locationsCache.set(locationId, data)
             logger.info(`Loaded prayer times for location ${locationId}`)

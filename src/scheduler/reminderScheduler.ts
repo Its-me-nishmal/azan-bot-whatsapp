@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { SessionManager } from '../bot/SessionManager.js'
 import { AzanService } from '../services/azanService.js'
 import { GroupConfig } from '../database/models/GroupConfig.js'
-import { getCurrentTime } from '../utils/time.js'
+import { getCurrentTime, formatTimeForDisplay } from '../utils/time.js'
 import { PrayerName } from '../types/index.js'
 import { logger } from '../utils/logger.js'
 
@@ -111,13 +111,15 @@ export class ReminderScheduler {
             isha: 'Isha (Night)'
         }
 
+        const displayTime = formatTimeForDisplay(time)
+
         return `🕌 *AZAN REMINDER* 🕌
-
-📍 Location: ${location}
-🕐 Prayer: ${prayerNames[prayer]}
-⏰ Time: ${time}
-
-May Allah accept your prayers. 🤲`
+    
+    📍 Location: ${location}
+    🕐 Prayer: ${prayerNames[prayer]}
+    ⏰ Time: ${displayTime}
+    
+    May Allah accept your prayers. 🤲`
     }
 
     /**

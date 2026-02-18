@@ -26,8 +26,6 @@ export class WebSocketEventHandler {
     handleConnection(socket: Socket): void {
         logger.info(`Client connected: ${socket.id}`)
 
-        // Attempt authentication on connection (for clients with stored tokens)
-        // Note: This doesn't block unauthenticated connections for login/register
         const authToken = socket.handshake.auth.token
         if (authToken) {
             authenticateSocket(socket)
@@ -96,7 +94,6 @@ export class WebSocketEventHandler {
                 return
             }
 
-            // Mark socket as authenticated
             socket.data.authenticated = true
             socket.data.user = {
                 username: result.user.username,
@@ -123,7 +120,6 @@ export class WebSocketEventHandler {
 
             const { username, password, role } = validation.value as { username: string; password: string; role?: 'admin' | 'manager' }
 
-            // Check if user already exists
             const existingUser = await User.findOne({ username })
             if (existingUser) {
                 socket.emit('auth:error', { message: 'Username already taken' })
@@ -162,7 +158,6 @@ export class WebSocketEventHandler {
                 message: 'Session created successfully. Waiting for QR scan...'
             })
 
-            // Broadcast to all clients
             this.io.emit('session:list:update')
 
             logger.info(`Session created via WebSocket: ${sessionId}`)
@@ -259,9 +254,10 @@ export class WebSocketEventHandler {
         locationId: number
         locationName: string
         groupJid: string
+        groupName?: string
     }): Promise<void> {
         try {
-            const { sessionId, locationId, locationName, groupJid } = data
+            const { sessionId, locationId, locationName, groupJid, groupName } = data
 
             if (!sessionId || !locationId || !locationName || !groupJid) {
                 socket.emit('error', {
@@ -276,6 +272,7 @@ export class WebSocketEventHandler {
                 locationId,
                 locationName,
                 groupJid,
+                groupName: groupName || '',
                 enabled: true
             })
 

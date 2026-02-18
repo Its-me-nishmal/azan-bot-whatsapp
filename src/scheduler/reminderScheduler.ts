@@ -11,6 +11,9 @@ export class ReminderScheduler {
     private azanService: AzanService
     private isRunning = false
     private enabledPrayers: PrayerName[]
+    private dailyScheduleSent: Set<string> = new Set() // Track which groups already received today's schedule
+    private lastScheduleDate: string = ''
+    private followUpMessagesSent: Set<string> = new Set() // Track which groups received follow-up messages
 
     constructor(sessionManager: SessionManager, azanService: AzanService) {
         this.sessionManager = sessionManager
@@ -33,7 +36,13 @@ export class ReminderScheduler {
         // Run every minute
         cron.schedule('* * * * *', async () => {
             await this.checkAndSendReminders()
+            await this.checkAndSendFollowUpMessages()
             await this.checkAndTriggerIshaPoll()
+            await this.checkAndSendDailySchedule()
+
+            // Member monitoring for duplicate groups
+            const { MemberMonitoringService } = await import('../services/MemberMonitoringService.js')
+            await MemberMonitoringService.processMonitoring(this.sessionManager)
         })
 
         this.isRunning = true
@@ -62,12 +71,11 @@ export class ReminderScheduler {
                     if (!prayerTime || !prayerTime.isha) continue
 
                     // Seeded random offset between 20 and 200 minutes
-                    // Using groupJid + date as seed to keep it consistent for the day
                     const seed = config.groupJid + today
                     let hash = 0
                     for (let i = 0; i < seed.length; i++) {
                         hash = ((hash << 5) - hash) + seed.charCodeAt(i)
-                        hash |= 0 // Convert to 32bit integer
+                        hash |= 0
                     }
                     const randomOffset = Math.abs(hash % (200 - 20)) + 20
                     const pollTime = addMinutes(prayerTime.isha, randomOffset)
@@ -91,7 +99,6 @@ export class ReminderScheduler {
         if (!bot) return
 
         try {
-            // Get group metadata to find participants
             const groupMetadata = await bot.getAllGroups()
             const group = groupMetadata.find(g => g.id === groupJid)
 
@@ -103,11 +110,8 @@ export class ReminderScheduler {
             const prayers = ['🌅 Subh (Fajr)', '☀️ Duhr', '🕒 Asr', '🌆 Magrib', '🌙 Isha']
             const pollName = 'Did you pray today? (Daily Summary)'
 
-            // Send to members one by one with random delay
             for (const participant of group.participants) {
                 const jid = participant.id
-
-                // Random delay between 5 to 30 seconds to prevent spam
                 const delay = Math.floor(Math.random() * (30000 - 5000 + 1) + 5000)
 
                 setTimeout(async () => {
@@ -133,18 +137,15 @@ export class ReminderScheduler {
 
         for (const bot of sessions) {
             try {
-                // Get group configs for this session
                 const configs = await GroupConfig.find({
                     sessionId: bot.sessionId,
                     enabled: true
                 })
 
                 for (const config of configs) {
-                    // Get today's prayer times
                     const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
                     if (!prayerTime) continue
 
-                    // Check each enabled prayer
                     for (const prayer of this.enabledPrayers) {
                         if (prayerTime[prayer] === currentTime) {
                             await this.sendReminder(bot.sessionId, config.groupJid, config.locationName, prayer, prayerTime[prayer])
@@ -184,26 +185,149 @@ export class ReminderScheduler {
     }
 
     /**
-     * Format reminder message
+     * Get random Malayalam phrase for prayer reminder
+     */
+    private getRandomMalayalamPhrase(): string {
+        const phrases = [
+            'ബാങ്ക് കൊടുക്കുന്നു',
+            'സമയം ആയി',
+            'നമസ്കാര സമയം',
+            'നമസ്കാരം ആരംഭിച്ചു',
+            'സമയം എത്തി, നമസ്കരിക്കാം',
+            'നമസ്കാരത്തിന് തയ്യാറാകൂ',
+            'നമസ്കാരത്തിന് വിളി',
+            'ബാങ്ക് മുഴങ്ങി',
+            'ബാങ്ക് ആരംഭിച്ചു',
+            'നമസ്കാരം വേളം',
+            'സമയം പ്രവേശിച്ചു',
+            'നമസ്കരിക്കാന് സമയം',
+            'നമസ്കാരം വിളിക്കുന്നു',
+            'സമയം ആയി 🤲',
+            'നമസ്കാര സമയം ആയി',
+            'ബാങ്ക് സമയം',
+            'നമസ്കാരത്തിന് സമയം ആയി',
+            'സമയം എത്തി 🤍',
+            'നമസ്കാരം ചെയ്യാം',
+            'ബാങ്ക് ആയി',
+            'സമയം എത്തി',
+            'നമസ്കാര വേളം',
+            'നമസ്കാരം ആരംഭിക്കാം',
+            'നമസ്കരിക്കാം 🤲',
+            'സമയം ആയി, നമസ്കരിക്കാം',
+            'നമസ്കാരം സമയം ആയി',
+            'ബാങ്ക് വിളിച്ചു',
+            'നമസ്കാരത്തിന് തയ്യാറാണ്',
+            'സമയം പ്രവേശിച്ചു 🤍',
+            'നമസ്കാരത്തിന് വിളിക്കുന്നു'
+        ]
+
+        return phrases[Math.floor(Math.random() * phrases.length)]
+    }
+
+    /**
+     * Format reminder message in Malayalam style
      */
     private formatReminderMessage(location: string, prayer: PrayerName, time: string): string {
-        const prayerNames = {
-            fajr: 'Fajr (Dawn)',
-            dhuhr: 'Dhuhr (Noon)',
-            asr: 'Asr (Afternoon)',
-            maghrib: 'Maghrib (Sunset)',
-            isha: 'Isha (Night)'
+        const prayerNamesMalayalam = {
+            fajr: 'സുബ്ഹ്',
+            dhuhr: 'ദുഹർ',
+            asr: 'അസർ',
+            maghrib: 'മഗ്റിബ്',
+            isha: 'ഇഷാ'
         }
 
         const displayTime = formatTimeForDisplay(time)
+        const randomPhrase = this.getRandomMalayalamPhrase()
 
-        return `🕌 *AZAN REMINDER* 🕌
-    
-    📍 Location: ${location}
-    🕐 Prayer: ${prayerNames[prayer]}
-    ⏰ Time: ${displayTime}
-    
-    May Allah accept your prayers. 🤲`
+        return `🕌 ${prayerNamesMalayalam[prayer]} ${randomPhrase}
+${displayTime}`
+    }
+
+    /**
+     * Check and send daily prayer schedule between 4:00 AM - 4:30 AM with random delays
+     */
+    private async checkAndSendDailySchedule(): Promise<void> {
+        const now = new Date()
+        const currentHour = now.getHours()
+        const currentMinute = now.getMinutes()
+        const { getCurrentDateMD } = await import('../utils/time.js')
+        const today = getCurrentDateMD()
+
+        // Reset tracking if it's a new day
+        if (this.lastScheduleDate !== today) {
+            this.dailyScheduleSent.clear()
+            this.lastScheduleDate = today
+        }
+
+        // Only run between 4:00 AM and 4:30 AM
+        if (currentHour !== 4 || currentMinute > 30) return
+
+        const sessions = this.sessionManager.getAllSessions()
+
+        for (const bot of sessions) {
+            try {
+                const configs = await GroupConfig.find({
+                    sessionId: bot.sessionId,
+                    enabled: true
+                })
+
+                for (const config of configs) {
+                    const groupKey = `${bot.sessionId}:${config.groupJid}:${today}`
+
+                    if (this.dailyScheduleSent.has(groupKey)) continue
+
+                    const seed = config.groupJid + today
+                    let hash = 0
+                    for (let i = 0; i < seed.length; i++) {
+                        hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+                        hash |= 0
+                    }
+                    const randomMinute = Math.abs(hash % 31) // 0-30 minutes
+
+                    if (currentMinute === randomMinute) {
+                        const prayerTimes = this.azanService.getTodaysPrayerTimes(config.locationId)
+                        if (!prayerTimes) continue
+
+                        const message = this.formatDailyScheduleMessage(config.locationName, prayerTimes)
+                        await bot.sendToGroup(config.groupJid, message)
+
+                        this.dailyScheduleSent.add(groupKey)
+                        logger.info(`📅 Sent daily schedule to ${config.locationName} at 04:${randomMinute.toString().padStart(2, '0')} (${bot.sessionId})`)
+                    }
+                }
+            } catch (error) {
+                logger.error({ error }, `Error sending daily schedule for session ${bot.sessionId}`)
+            }
+        }
+    }
+
+    /**
+     * Format daily prayer schedule message
+     */
+    private formatDailyScheduleMessage(location: string, times: any): string {
+        const date = new Date()
+        const formattedDate = date.toLocaleDateString('en-IN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })
+
+        return `🕌 *TODAY'S PRAYER TIMES* 🕌
+
+📍 *Location:* ${location}
+📅 *Date:* ${formattedDate}
+
+*Prayer Schedule:*
+🌅 *Fajr (Subh):* ${formatTimeForDisplay(times.fajr)}
+☀️ *Dhuhr:* ${formatTimeForDisplay(times.dhuhr)}
+🕒 *Asr:* ${formatTimeForDisplay(times.asr)}
+🌆 *Maghrib:* ${formatTimeForDisplay(times.maghrib)}
+🌙 *Isha:* ${formatTimeForDisplay(times.isha)}
+
+_You will receive automatic reminders at each prayer time._
+
+May Allah guide us all. 🤲`
     }
 
     /**
@@ -212,5 +336,93 @@ export class ReminderScheduler {
     stop(): void {
         this.isRunning = false
         logger.info('Scheduler stopped')
+    }
+
+    /**
+     * Get random Malayalam follow-up question
+     */
+    private getRandomFollowUpQuestion(prayer: PrayerName): string {
+        const prayerNamesMalayalam: Record<PrayerName, string> = {
+            fajr: 'സുബ്ഹ്',
+            dhuhr: 'ദുഹർ',
+            asr: 'അസർ',
+            maghrib: 'മഗ്റിബ്',
+            isha: 'ഇഷാ'
+        }
+
+        const name = prayerNamesMalayalam[prayer]
+
+        const phrases = [
+            `ഇന്ന് ${name} നിസ്കാരിച്ചോ?`,
+            `ഇന്ന് ${name} നിസ്കാരിച്ചോ? 🤲`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്തോ?`,
+            `${name} നിസ്കാരം കഴിഞ്ഞോ?`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്യാമോ?`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്തുവോ? 🤍`,
+            `ഇന്ന് ${name} നിസ്കാരം ഓർമ്മയുണ്ടോ?`,
+            `ഇന്ന് ${name} നിസ്കരിക്കാന് സമയം കിട്ടിയോ?`,
+            `ഇന്ന് ${name} നിസ്കാരം വിട്ടുപോയില്ലല്ലോ?`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്യാന് മറക്കല്ലേ 🤲`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്തോ സുഹൃത്തെ?`
+        ]
+
+        return phrases[Math.floor(Math.random() * phrases.length)]
+    }
+
+    /**
+     * Send warm follow-up messages 20-60 minutes after each prayer time
+     */
+    private async checkAndSendFollowUpMessages(): Promise<void> {
+        const currentTime = getCurrentTime()
+        const sessions = this.sessionManager.getAllSessions()
+        const { getCurrentDateMD, addMinutes } = await import('../utils/time.js')
+        const today = getCurrentDateMD()
+
+        // Reset tracking at midnight
+        if (this.lastScheduleDate !== today) {
+            this.followUpMessagesSent.clear()
+        }
+
+        for (const bot of sessions) {
+            try {
+                const configs = await GroupConfig.find({
+                    sessionId: bot.sessionId,
+                    enabled: true
+                })
+
+                for (const config of configs) {
+                    const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
+                    if (!prayerTime) continue
+
+                    for (const prayer of this.enabledPrayers) {
+                        const baseTime = prayerTime[prayer]
+                        if (!baseTime) continue
+
+                        const followUpKey = `followup:${bot.sessionId}:${config.groupJid}:${prayer}:${today}`
+
+                        if (this.followUpMessagesSent.has(followUpKey)) continue
+
+                        // Seeded random offset 20-60 minutes per group per prayer
+                        const seed = config.groupJid + prayer + today
+                        let hash = 0
+                        for (let i = 0; i < seed.length; i++) {
+                            hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+                            hash |= 0
+                        }
+                        const randomOffset = Math.abs(hash % 41) + 20 // 20-60 min
+                        const followUpTime = addMinutes(baseTime, randomOffset)
+
+                        if (currentTime === followUpTime) {
+                            const message = this.getRandomFollowUpQuestion(prayer)
+                            await bot.sendToGroup(config.groupJid, message)
+                            this.followUpMessagesSent.add(followUpKey)
+                            logger.info(`💬 Sent follow-up for ${prayer} to ${config.locationName} (+${randomOffset}m) [${bot.sessionId}]`)
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error({ error }, `Error sending follow-up messages for session ${bot.sessionId}`)
+            }
+        }
     }
 }

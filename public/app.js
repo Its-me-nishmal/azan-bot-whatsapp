@@ -261,7 +261,7 @@ function loadLocations() {
         { id: 206, name: 'Kannur', district: 'Kannur' },
         { id: 303, name: 'Kalpetta', district: 'Wayanad' },
         { id: 408, name: 'Kozhikode North', district: 'Kozhikode' },
-        { id: 503, name: 'Nilambur', district: 'Malappuram' },
+        { id: 508, name: 'Malappuram', district: 'Malappuram' },
         { id: 608, name: 'Palakkad', district: 'Palakkad' },
         { id: 707, name: 'Thrissur', district: 'Thrissur' },
         { id: 807, name: 'Kochi', district: 'Ernakulam' },

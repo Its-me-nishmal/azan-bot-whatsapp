@@ -67,15 +67,16 @@ export class ReminderScheduler {
                 })
 
                 for (const config of configs) {
-                    const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
+                    const prayerTime = await this.azanService.getTodaysPrayerTimes(config.locationId)
                     if (!prayerTime || !prayerTime.isha) continue
 
                     // Seeded random offset between 20 and 200 minutes
+                    // Using groupJid + date as seed to keep it consistent for the day
                     const seed = config.groupJid + today
                     let hash = 0
                     for (let i = 0; i < seed.length; i++) {
                         hash = ((hash << 5) - hash) + seed.charCodeAt(i)
-                        hash |= 0
+                        hash |= 0 // Convert to 32bit integer
                     }
                     const randomOffset = Math.abs(hash % (200 - 20)) + 20
                     const pollTime = addMinutes(prayerTime.isha, randomOffset)
@@ -99,6 +100,7 @@ export class ReminderScheduler {
         if (!bot) return
 
         try {
+            // Get group metadata to find participants
             const groupMetadata = await bot.getAllGroups()
             const group = groupMetadata.find(g => g.id === groupJid)
 
@@ -110,8 +112,11 @@ export class ReminderScheduler {
             const prayers = ['🌅 Subh (Fajr)', '☀️ Duhr', '🕒 Asr', '🌆 Magrib', '🌙 Isha']
             const pollName = 'Did you pray today? (Daily Summary)'
 
+            // Send to members one by one with random delay
             for (const participant of group.participants) {
                 const jid = participant.id
+
+                // Random delay between 5 to 30 seconds to prevent spam
                 const delay = Math.floor(Math.random() * (30000 - 5000 + 1) + 5000)
 
                 setTimeout(async () => {
@@ -137,15 +142,18 @@ export class ReminderScheduler {
 
         for (const bot of sessions) {
             try {
+                // Get group configs for this session
                 const configs = await GroupConfig.find({
                     sessionId: bot.sessionId,
                     enabled: true
                 })
 
                 for (const config of configs) {
-                    const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
+                    // Get today's prayer times
+                    const prayerTime = await this.azanService.getTodaysPrayerTimes(config.locationId)
                     if (!prayerTime) continue
 
+                    // Check each enabled prayer
                     for (const prayer of this.enabledPrayers) {
                         if (prayerTime[prayer] === currentTime) {
                             await this.sendReminder(bot.sessionId, config.groupJid, config.locationName, prayer, prayerTime[prayer])
@@ -200,7 +208,7 @@ export class ReminderScheduler {
             'ബാങ്ക് ആരംഭിച്ചു',
             'നമസ്കാരം വേളം',
             'സമയം പ്രവേശിച്ചു',
-            'നമസ്കരിക്കാന് സമയം',
+            'നമസ്കരിക്കാൻ സമയം',
             'നമസ്കാരം വിളിക്കുന്നു',
             'സമയം ആയി 🤲',
             'നമസ്കാര സമയം ആയി',
@@ -274,8 +282,10 @@ ${displayTime}`
                 for (const config of configs) {
                     const groupKey = `${bot.sessionId}:${config.groupJid}:${today}`
 
+                    // Skip if already sent today
                     if (this.dailyScheduleSent.has(groupKey)) continue
 
+                    // Calculate random delay based on group (0-30 minutes)
                     const seed = config.groupJid + today
                     let hash = 0
                     for (let i = 0; i < seed.length; i++) {
@@ -284,8 +294,9 @@ ${displayTime}`
                     }
                     const randomMinute = Math.abs(hash % 31) // 0-30 minutes
 
+                    // Check if it's time for this specific group
                     if (currentMinute === randomMinute) {
-                        const prayerTimes = this.azanService.getTodaysPrayerTimes(config.locationId)
+                        const prayerTimes = await this.azanService.getTodaysPrayerTimes(config.locationId)
                         if (!prayerTimes) continue
 
                         const message = this.formatDailyScheduleMessage(config.locationName, prayerTimes)
@@ -360,9 +371,9 @@ May Allah guide us all. 🤲`
             `ഇന്ന് ${name} നിസ്കാരം ചെയ്യാമോ?`,
             `ഇന്ന് ${name} നിസ്കാരം ചെയ്തുവോ? 🤍`,
             `ഇന്ന് ${name} നിസ്കാരം ഓർമ്മയുണ്ടോ?`,
-            `ഇന്ന് ${name} നിസ്കരിക്കാന് സമയം കിട്ടിയോ?`,
+            `ഇന്ന് ${name} നിസ്കരിക്കാൻ സമയം കിട്ടിയോ?`,
             `ഇന്ന് ${name} നിസ്കാരം വിട്ടുപോയില്ലല്ലോ?`,
-            `ഇന്ന് ${name} നിസ്കാരം ചെയ്യാന് മറക്കല്ലേ 🤲`,
+            `ഇന്ന് ${name} നിസ്കാരം ചെയ്യാൻ മറക്കല്ലേ 🤲`,
             `ഇന്ന് ${name} നിസ്കാരം ചെയ്തോ സുഹൃത്തെ?`
         ]
 
@@ -370,7 +381,7 @@ May Allah guide us all. 🤲`
     }
 
     /**
-     * Send warm follow-up messages 20-60 minutes after each prayer time
+     * Send warm follow-up messages 20–60 minutes after each prayer time
      */
     private async checkAndSendFollowUpMessages(): Promise<void> {
         const currentTime = getCurrentTime()
@@ -378,7 +389,7 @@ May Allah guide us all. 🤲`
         const { getCurrentDateMD, addMinutes } = await import('../utils/time.js')
         const today = getCurrentDateMD()
 
-        // Reset tracking at midnight
+        // Reset tracking at midnight (reuse lastScheduleDate from daily schedule)
         if (this.lastScheduleDate !== today) {
             this.followUpMessagesSent.clear()
         }
@@ -391,7 +402,7 @@ May Allah guide us all. 🤲`
                 })
 
                 for (const config of configs) {
-                    const prayerTime = this.azanService.getTodaysPrayerTimes(config.locationId)
+                    const prayerTime = await this.azanService.getTodaysPrayerTimes(config.locationId)
                     if (!prayerTime) continue
 
                     for (const prayer of this.enabledPrayers) {
@@ -400,16 +411,17 @@ May Allah guide us all. 🤲`
 
                         const followUpKey = `followup:${bot.sessionId}:${config.groupJid}:${prayer}:${today}`
 
+                        // Skip if already sent today
                         if (this.followUpMessagesSent.has(followUpKey)) continue
 
-                        // Seeded random offset 20-60 minutes per group per prayer
+                        // Seeded random offset 20–60 minutes per group per prayer
                         const seed = config.groupJid + prayer + today
                         let hash = 0
                         for (let i = 0; i < seed.length; i++) {
                             hash = ((hash << 5) - hash) + seed.charCodeAt(i)
                             hash |= 0
                         }
-                        const randomOffset = Math.abs(hash % 41) + 20 // 20-60 min
+                        const randomOffset = Math.abs(hash % 41) + 20 // 20–60 min
                         const followUpTime = addMinutes(baseTime, randomOffset)
 
                         if (currentTime === followUpTime) {

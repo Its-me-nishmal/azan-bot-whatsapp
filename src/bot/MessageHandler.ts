@@ -83,7 +83,7 @@ export class MessageHandler {
         }
 
         // Get today's prayer times
-        const prayerTimes = this.azanService.getTodaysPrayerTimes(location.id)
+        const prayerTimes = await this.azanService.getTodaysPrayerTimes(location.id)
         if (!prayerTimes) {
             await sendReply(`❌ Prayer times not available for ${location.name}`)
             return
@@ -127,31 +127,15 @@ export class MessageHandler {
             return
         }
 
-        const prayerTimes = this.azanService.getTodaysPrayerTimes(location.id)
-        if (!prayerTimes) {
-            await sendReply(`❌ Prayer times not available for ${location.name}`)
+        const nextPrayerData = await this.azanService.getNextPrayer(location.id)
+        if (!nextPrayerData) {
+            await sendReply(`❌ Next prayer time not available for ${location.name}`)
             return
         }
 
-        // Find next prayer
+        const nextPrayer = nextPrayerData.name.charAt(0).toUpperCase() + nextPrayerData.name.slice(1)
+        const nextTime = nextPrayerData.time
         const currentTime = getCurrentTime()
-        const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const
-
-        let nextPrayer: string | null = null
-        let nextTime: string | null = null
-
-        for (const prayer of prayers) {
-            if (prayerTimes[prayer] > currentTime) {
-                nextPrayer = prayer.charAt(0).toUpperCase() + prayer.slice(1)
-                nextTime = prayerTimes[prayer]
-                break
-            }
-        }
-
-        if (!nextPrayer) {
-            nextPrayer = 'Fajr (Tomorrow)'
-            nextTime = prayerTimes.fajr
-        }
 
         const message = `🕌 *Next Prayer Time*
     

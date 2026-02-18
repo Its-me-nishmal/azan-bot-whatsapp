@@ -104,11 +104,15 @@ export class AzanService {
     /**
      * Get prayer times for a specific date
      */
-    getPrayerTimeForDate(locationId: number, date: Date = new Date()): PrayerTime | null {
-        const data = this.locationsCache.get(locationId)
+    async getPrayerTimeForDate(locationId: number, date: Date = new Date()): Promise<PrayerTime | null> {
+        let data = this.locationsCache.get(locationId)
         if (!data) {
-            logger.warn(`No data cached for location ${locationId}`)
-            return null
+            try {
+                data = await this.getLocationData(locationId)
+            } catch (error) {
+                logger.warn(`Failed to load data for location ${locationId} on demand`)
+                return null
+            }
         }
 
         const dateStr = getCurrentDateMD()
@@ -124,15 +128,15 @@ export class AzanService {
     /**
      * Get today's prayer times for a location
      */
-    getTodaysPrayerTimes(locationId: number): PrayerTime | null {
+    async getTodaysPrayerTimes(locationId: number): Promise<PrayerTime | null> {
         return this.getPrayerTimeForDate(locationId, new Date())
     }
 
     /**
      * Get the next upcoming prayer for a location
      */
-    getNextPrayer(locationId: number): { name: string; time: string } | null {
-        const prayerTimes = this.getTodaysPrayerTimes(locationId)
+    async getNextPrayer(locationId: number): Promise<{ name: string; time: string } | null> {
+        const prayerTimes = await this.getTodaysPrayerTimes(locationId)
         if (!prayerTimes) {
             return null
         }

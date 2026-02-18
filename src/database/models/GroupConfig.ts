@@ -18,6 +18,10 @@ const groupConfigSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    groupName: {
+        type: String,
+        default: ''
+    },
     enabled: {
         type: Boolean,
         default: true

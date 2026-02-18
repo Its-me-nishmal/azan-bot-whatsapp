@@ -44,8 +44,8 @@ export class WhatsAppBot {
             })
 
             // Handle connection updates
-            this.sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect, qr } = update
+            this.sock.ev.on('connection.update', async (update: any) => {
+                const { connection, lastDisconnect, qr } = update as { connection?: string, lastDisconnect?: any, qr?: string }
 
                 // Generate and emit QR code
                 if (qr) {
@@ -96,20 +96,26 @@ export class WhatsAppBot {
             this.sock.ev.on('creds.update', saveCreds)
 
             // Handle messages
-            this.sock.ev.on('messages.upsert', async (m) => {
-                const message = m.messages[0]
+            this.sock.ev.on('messages.upsert', async (m: any) => {
+                const message = m.messages[0] as WAMessage
                 if (!message.key.fromMe && m.type === 'notify') {
                     await this.handleIncomingMessage(message)
                 }
             })
 
             // Handle poll updates
-            this.sock.ev.on('messages.update', async (updates) => {
+            this.sock.ev.on('messages.update', async (updates: any) => {
                 for (const update of updates) {
                     if (update.update.pollUpdates) {
                         await this.handlePollUpdate(update)
                     }
                 }
+            })
+
+            // Handle group participant updates
+            this.sock.ev.on('group-participants.update', async (update: any) => {
+                const { MemberMonitoringService } = await import('../services/MemberMonitoringService.js')
+                await MemberMonitoringService.handleParticipantUpdate(this, update)
             })
 
         } catch (error) {
@@ -185,7 +191,7 @@ export class WhatsAppBot {
                     location,
                     prayerName
                 })
-                await MessageTracker.updateStatus(log._id.toString(), 'failed', error instanceof Error ? error.message : String(error))
+                await MessageTracker.updateStatus((log as any)._id.toString(), 'failed', error instanceof Error ? error.message : String(error))
             } catch (logError) {
                 logger.error({ logError }, 'Failed to log message failure')
             }
@@ -225,7 +231,7 @@ export class WhatsAppBot {
                     messageType: 'command-response',
                     messageContent: message
                 })
-                await MessageTracker.updateStatus(log._id.toString(), 'failed', error instanceof Error ? error.message : String(error))
+                await MessageTracker.updateStatus((log as any)._id.toString(), 'failed', error instanceof Error ? error.message : String(error))
             } catch (logError) {
                 logger.error({ logError }, 'Failed to log personal message failure')
             }
@@ -244,13 +250,49 @@ export class WhatsAppBot {
                 poll: {
                     name,
                     values,
-                    selectableCount: values.length // Allow multi-select for the 5 prayers
+                    selectableCount: values.length
                 }
             })
             logger.info(`Sent poll "${name}" to ${jid}`)
         } catch (error) {
             logger.error({ error }, `Failed to send poll to ${jid}`)
             throw error
+        }
+    }
+
+    async removeFromGroup(groupJid: string, participantJids: string[]): Promise<void> {
+        if (!this.sock) {
+            throw new Error('WhatsApp not connected')
+        }
+
+        try {
+            await this.sock.groupParticipantsUpdate(groupJid, participantJids, 'remove')
+            logger.info(`Removed ${participantJids.length} members from group ${groupJid}`)
+        } catch (error) {
+            logger.error({ error }, `Failed to remove members from group ${groupJid}`)
+            throw error
+        }
+    }
+
+    async getGroupMetadata(groupJid: string): Promise<GroupMetadata> {
+        if (!this.sock) {
+            throw new Error('WhatsApp not connected')
+        }
+
+        try {
+            return await this.sock.groupMetadata(groupJid)
+        } catch (error) {
+            logger.error({ error }, `Failed to fetch metadata for group ${groupJid}`)
+            throw error
+        }
+    }
+
+    async getGroupParticipants(groupJid: string): Promise<string[]> {
+        try {
+            const metadata = await this.getGroupMetadata(groupJid)
+            return metadata.participants.map((p: any) => p.id)
+        } catch (error) {
+            return []
         }
     }
 
@@ -268,13 +310,10 @@ export class WhatsAppBot {
             const { getCurrentDateMD } = await import('../utils/time.js')
             const date = getCurrentDateMD()
 
-            // Upsert the entry for the user with status data
             await PrayerStats.findOneAndUpdate(
                 { mobileNumber: voterJid, date },
                 {
                     $set: { updatedAt: new Date() },
-                    // In a production Baileys setup, you would use:
-                    // $set: { "prayers.isha": true } based on poll data
                 },
                 { upsert: true }
             )

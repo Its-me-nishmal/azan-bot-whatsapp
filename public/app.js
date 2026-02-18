@@ -261,16 +261,16 @@ function loadLocations() {
         { id: 206, name: 'Kannur', district: 'Kannur' },
         { id: 303, name: 'Kalpetta', district: 'Wayanad' },
         { id: 408, name: 'Kozhikode North', district: 'Kozhikode' },
-        { id: 503, name: 'Malappuram', district: 'Malappuram' },
-        { id: 604, name: 'Palakkad', district: 'Palakkad' },
-        { id: 705, name: 'Thrissur', district: 'Thrissur' },
+        { id: 503, name: 'Nilambur', district: 'Malappuram' },
+        { id: 608, name: 'Palakkad', district: 'Palakkad' },
+        { id: 707, name: 'Thrissur', district: 'Thrissur' },
         { id: 807, name: 'Kochi', district: 'Ernakulam' },
-        { id: 903, name: 'Idukki', district: 'Idukki' },
-        { id: 1003, name: 'Kottayam', district: 'Kottayam' },
+        { id: 904, name: 'Idukki', district: 'Idukki' },
+        { id: 1005, name: 'Kottayam', district: 'Kottayam' },
         { id: 1103, name: 'Alappuzha', district: 'Alappuzha' },
-        { id: 1206, name: 'Thiruvalla', district: 'Pathanamthitta' },
-        { id: 1303, name: 'Kollam', district: 'Kollam' },
-        { id: 1406, name: 'Thiruvananthapuram', district: 'Trivandrum' }
+        { id: 1201, name: 'Thiruvalla', district: 'Pathanamthitta' },
+        { id: 1309, name: 'Kollam', district: 'Kollam' },
+        { id: 1408, name: 'Thiruvananthapuram', district: 'Thiruvananthapuram' }
     ]
 
     const locationSelector = document.getElementById('location-selector')
@@ -327,7 +327,10 @@ function displayDiscoveredGroups() {
 }
 
 function addGroupMapping() {
-    const groupJid = document.getElementById('group-selector').value
+    const groupSelector = document.getElementById('group-selector')
+    const groupJid = groupSelector.value
+    const groupName = groupSelector.options[groupSelector.selectedIndex]?.text?.split(' (')[0]?.trim() || groupJid
+
     const locationId = document.getElementById('location-selector').value
     const locationSelector = document.getElementById('location-selector')
     const selectedOption = locationSelector.options[locationSelector.selectedIndex]
@@ -344,7 +347,8 @@ function addGroupMapping() {
         sessionId: currentSessionId,
         locationId: parseInt(locationId),
         locationName: `${locationName}, ${locationDistrict}`,
-        groupJid
+        groupJid,
+        groupName
     })
 
     // Clear selections
@@ -369,7 +373,7 @@ function displayGroupMappings() {
         <table class="mappings-table">
             <thead>
                 <tr>
-                    <th>Group JID</th>
+                    <th>Group Name</th>
                     <th>Location</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -378,7 +382,10 @@ function displayGroupMappings() {
             <tbody>
                 ${groupMappings.map(mapping => `
                     <tr>
-                        <td><code>${mapping.groupJid}</code></td>
+                        <td>
+                            <strong>${mapping.groupName || '(No name)'}</strong><br>
+                            <code style="font-size:11px;color:#999">${mapping.groupJid}</code>
+                        </td>
                         <td>${mapping.locationName}</td>
                         <td>
                             <span class="status-badge ${mapping.enabled ? 'active' : 'inactive'}">
